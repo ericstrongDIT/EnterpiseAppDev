@@ -19,5 +19,6 @@ app.use(express.static(path.join(__dirname, 'public'))); //setting static assets
 ////////////// Router ////////////////////
 app.use('/', indexRouter);
 
+
 //////////////// listener /////////////////////////////
 app.listen(port, () => console.log(`EAD Lab1 app listening on port ${port}!`))

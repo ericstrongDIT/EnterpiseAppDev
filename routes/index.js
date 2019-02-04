@@ -1,175 +1,283 @@
+/////////// IMPORTS /////////////////////////////
+
 const express = require('express');
 const router = express.Router();
-const dbObj = require('../database/db');
+// const Sequelize = require('sequelize');
+
+//MODELS
+const usersObj = require('../models/users');
+const Users = usersObj.get('Users');
+
+const productsObj = require('../models/products');
+const Products = productsObj.get('Products');
+
+const purchasesObj = require('../models/purchases');
+const Purchases = purchasesObj.get('Purchases');
+
+const purchase_itemsObj = require('../models/purchase_items');
+const Purchase_items = purchase_itemsObj.get('Purchase_items');
+
+
+//For Posting
+var bodyParser = require('body-parser')
+router.use(bodyParser.json()); // to support JSON-encoded bodies
+router.use(bodyParser.urlencoded({ // to support URL-encoded bodies
+    extended: true
+}));
 
 ///////////// Functions /////////////////////////////////////
-//function used during setting up to inspect all tables
-function seetables(res){
-    const db = dbObj.get('db');
-    res.json(db.listTables());
-}
+//for problem set 5
+// Functions to create new data - I will pass parameters of data into each function to create a new data row
+function create_user(email, password, details) {
 
-
-
-// function to be used to query from the database
-function getdata(table, res, q) {
-    console.log('----------------- ' + table.toUpperCase() + ' ----------------');
-    console.log(q);
-    const db = dbObj.get('db');
-    db.query(q).then(data => {
-        // output to appear in browser
-        res.json(data);
-    })
-}
-
-//function to implement prepared statements for problem set 3
-function preparedstatement(res, params) {
-    console.log('----------------- Prepared Statement ----------------');
-
-    //get database object
-    const db = dbObj.get('db');
-    console.log(params.id);
-    db.query(
-        'select * from products where id = ${id};', {
-            id: params.id
-        }
-    ).then(data => {
-        // returning the output
-        res.json(data);
-    });
+    Users.create({
+            email: email,
+            password: password,
+            details: details
+        })
+        //checking it doesnt already exist
+        .then(() => Users.findOrCreate({
+            where: {
+                email: email,
+                password: password,
+                details: details
+            }
+        }))
+        .spread((users, created) => {
+            console.log(users.get({
+                plain: true
+            }))
+            console.log(created);
+        })
 
 }
-
-//function to call a stored procedure from Postgres docker image. NOTE: I have already created the stored procedure via the shell
-function storedprocedure(res, params) {
-    console.log('----------------- stored procedure ----------------');
-    //get database object
-    const db = dbObj.get('db');
-    
-    db.query(
-        "select * from erictest(${id})", {
-            id: params.id
-        }
-    ).then(data => {
-        // returning the output
-        res.json(data);
-    });
+// function to create a new product
+function create_product(title, price, tags) {
+    Products.create({
+            title: title,
+            price: price,
+            tags: tags
+        })
+        //checking it doesnt already exist
+        .then(() => Products.findOrCreate({
+            where: {
+                title: title,
+                price: price,
+                tags: tags
+            }
+        }))
+        .spread((products, created) => {
+            console.log(products.get({
+                plain: true
+            }))
+            console.log(created);
+        })
 
 }
 
+//function to create a new purchase
+function create_purchases(name, address, state, zipcode, user_id) {
+    Purchases.create({
+            name: name,
+            address: address,
+            state: state,
+            zipcode: zipcode,
+            user_id: user_id
+        })
+        //checking it doesnt already exist
+        .then(() => Purchases.findOrCreate({
+            where: {
+                name: name,
+                address: address,
+                state: state,
+                zipcode: zipcode,
+                user_id: user_id
+            }
+        }))
+        .spread((purchases, created) => {
+            console.log(purchases.get({
+                plain: true
+            }))
+            console.log(created);
+        })
+
+}
+
+//function to create a purchase items entry
+function create_purchase_items(purchase_id, product_id, price, quantity, state) {
+    Purchase_items.create({
+            purchase_id: purchase_id,
+            product_id: product_id,
+            price: price,
+            quantity: quantity,
+            state: state
+        })
+        //checking it doesnt already exist
+        .then(() => Purchase_items.findOrCreate({
+            where: {
+                purchase_id: purchase_id,
+                product_id: product_id,
+                price: price,
+                quantity: quantity,
+                state: state
+            }
+        }))
+        .spread((purchase_items, created) => {
+            console.log(purchase_items.get({
+                plain: true
+            }))
+            console.log(created);
+        })
+
+}
 
 
 ///////////////////// ENDPOINTS //////////////////////////
-//setting up part 5 - display all of the data from each table
-router.get('/settingup', (req, res, next) => {
-    seetables(res);
-   
-});
-
-// base endpoint
-router.get('/home', (req, res, next) => {
+// main endpoint to return home page
+router.get('/', (req, res, next) => {
     res.render('home', null);
 });
 
-// endpoint 1.1
+// getting all of the users 
 router.get('/users', (req, res) => {
-    //problem set: 1 part 1- users email and sex in order of most recently created.
-    var q = 'select email, details, created_at from users ORDER BY created_at DESC ;';
-    getdata('users', res, q);
-}); // request response
 
-//endpoint 1.2
-router.get('/users/:id', (req, res) => {
-    //problem set: 1 part 2 - users email and sex in order of most recently created where id = :id.
-    var id = req.params.id;
-    console.log('id:' + id)
-    var q = 'select email, details, created_at from users where id = ' + id + ';';
-    getdata('users', res, q);
-}); // request response
+    Users.findAll().then(users => {
+        res.send(users);
+    }).catch(err => console.log(err));
 
-//endpoint 1.3
+});
+
+
+// getting all of the products 
 router.get('/products', (req, res, next) => {
 
     if (!req.query.name) {
-        console.log('no params')
-        //problem set: 1 part 3- List all products in ascending order of price.
-        var q = 'select * from products ORDER BY price ASC ;';
-        getdata('products', res, q);
+        console.log('no params');
+
+        Products.findAll().then(products => {
+            res.send(products);
+        }).catch(err => console.log(err));
     } else {
         next();
     }
 
+});
 
-}); // request response
-
-//endpoint 1.4
-router.get('/products/:id', (req, res) => {
-    //problem set: 1 part 4 - Show details of the specified products.
-    var id = req.params.id;
-    console.log('id:' + id)
-
-    var q = 'select * from products  where id = ' + id + ' ORDER BY price ASC;';
-    getdata('products', res, q);
-}); // request response
-
-//endpoint 1.5
+// getting all of the purchases 
 router.get('/purchases', (req, res) => {
-    //problem set: 1 part 5- List purchase items to include the receiver’s name and, address, the purchaser’s email address and the price, quantity and delivery status of the purchased item. Order by price in descending order.
-    var q = `
-    SELECT 
-    Products.title,
-    purchases.name, 
-    purchases.address,
-    users.email, 
-    purchase_items.price, 
-    purchase_items.quantity, 
-    Purchase_items.state 
-    FROM purchases
-    INNER JOIN users on purchases.user_id = users.id 
-    INNER JOIN purchase_items on purchase_items.purchase_id = purchases.id
-    INNER JOIN products on purchase_items.product_id = products.id
-    ORDER BY purchase_items.price DESC;`;
 
-    getdata('users, purchases, purchaseitems and products', res, q);
-}); // request response
+    Purchases.findAll().then(purchases => {
+        res.send(purchases);
+    }).catch(err => console.log(err));
 
-//Problem set 2. filtering by name. badly.
+});
+
+// getting all of the purchase_items
+router.get('/purchase_items', (req, res) => {
+
+    Purchase_items.findAll().then(purchase_items => {
+        res.send(purchase_items);
+    }).catch(err => console.log(err));
+
+});
+
+//Problem set 5 - creating test data
+router.get('/createtestdata', (req, res) => {
+    //Calling models to create data
+    create_user('strong.erik@gmail.com', 'password123', {
+        sex: 'M'
+    });
+
+    create_product("Drum Kit", 1500.00);
+
+    create_purchases("Eric Strong", "19 Riversdale Palmerstown", "DU", 01, 51); // Eric is user 51
+
+    create_purchase_items(1001, 24, 1500.00, 1, "Pending"); // purchase_id 1001 , product_id 24 price 1500, quant 1 this may need to be dynamic
+
+    res.send('Data has been inserted!');
+    //res.status(200);
+
+
+});
+
+// Problem set 6 - RESTFul API - with new and improved endpoints
+//6.1
 router.get('/products', (req, res) => {
     if (req.query.name) {
         console.log('got params!');
-        const name = req.query.name; // name is the actual variable name
+        var name = req.query.name; // name is the actual variable name
         console.log(name);
-        var q = "select * from products where title = '" + name + "'"; // NOTE no semicolon so I can try SQLINJECTION
-        getdata('products', res, q);
 
-        /* BAD EXAMPLES - SQL INJECTION EXAMPLES: 
-        http://localhost:3000/products?name=Dictionary' or title = 'Python Book
-        http://localhost:3000/products?name=Ruby Book' or title = 'Baby Book
-        http://localhost:3000/products?name=Ruby Book' or title = 'Baby Book
-        http://localhost:3000/products?name=Ruby Book' ; select price, title from products where title = 'Python Book
-
-        */
+        // search for attributes
+        Products.findOne({
+            where: {
+                title: name
+            }
+        }).then(products => {
+            res.send(products);
+        })
     }
+});
+
+// 6.2
+router.get('/products/:id', (req, res) => {
+    var id = req.params.id;
+    console.log('id:' + id);
+
+    Products.findByPk(id).then(products => {
+        res.send(products);
+    })
+}); // request response
+
+//6.3
+router.post('/products', (req, res) => {
+
+    console.log('posting ' + req.body.title);
+
+    //reusing my function from above
+    create_product(req.body.title, req.body.price);
+
+    res.json({
+        status: 'successful',
+        data: req.body
+    });
 
 }); // request response
 
-//Problem set 3. 3.1 Using prepared statements
-router.get('/prepared/products/:id', (req, res) => {
-    const params = req.params;
-    preparedstatement(res, params);
+//6.4
+router.put('/products/:id', (req,res) =>{
+    var id = req.params.id;
+    console.log('PUT - Updating');
+    Products.update({
+    updatedAt: new Date(),
+    title: req.body.title,
+    price: req.body.price,
+    tags: req.body.tags,
+  }, {
+    where: {
+        id: id
+    }
+  });
+  // UPDATE product SET updatedAt = x title = x price = x tags = x WHERE id = param.id;
+  res.json({
+    status: 'successful update',
+    data: req.body
+});
+});
+ 
 
-    //test that it is imposible to use SQL injection
-    //http://localhost:3000/prepared/products/1 OR 1=1
-})
-
-//problem set 3. 3.2 Stored Procedure
-router.get('/storedprocedure/products/:id', (req, res) => {
-    const params = req.params;
-    storedprocedure(res,params);
-
-    //test that it is imposible to use SQL injection
-    //http://localhost:3000/storedprocedure/products/1 OR 1=1
-})
+//6.5
+router.delete('/products/:id', (req,res) =>{
+    var id = req.params.id;
+    
+    console.log('DELETING');
+    Products.destroy({
+        where: {
+            id: id
+        }
+    });
+    res.send(id + ' deleted');
+});
 
 //exporting the router module so it can be imported
 module.exports = router
